@@ -136,7 +136,7 @@ contract VRFCoordinator is VRF, OwnableUpgradeable {
 
     function initialize() public initializer {
         __Ownable_init();
-         s_config = Config({
+        s_config = Config({
             minimumRequestConfirmations: 3,
             maxGasLimit: 1000000,
             reentrancyLock: false
