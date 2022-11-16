@@ -3,9 +3,10 @@ pragma solidity ^0.8.4;
 
 import "./VRF.sol";
 import "./VRFConsumerBase.sol";
+import "./VRFCoordinatorV2Interface.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-contract VRFCoordinator is VRF, OwnableUpgradeable {
+contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
     // We use the config for the mgmt APIs
     struct Subscription {
         address owner; // Owner can fund/withdraw/cancel the sub.
@@ -229,13 +230,33 @@ contract VRFCoordinator is VRF, OwnableUpgradeable {
         return (s_config.minimumRequestConfirmations, s_config.maxGasLimit);
     }
 
+    /**
+     * @inheritdoc VRFCoordinatorV2Interface
+     */
+    function getRequestConfig()
+        external
+        view
+        override
+        returns (
+            uint16,
+            uint32,
+            bytes32[] memory
+        )
+    {
+        return (
+            s_config.minimumRequestConfirmations,
+            s_config.maxGasLimit,
+            s_provingKeyHashes
+        );
+    }
+
     function requestRandomWords(
         bytes32 keyHash,
         uint64 subId,
         uint16 requestConfirmations,
         uint32 callbackGasLimit,
         uint32 numWords
-    ) external nonReentrant returns (uint256) {
+    ) external override nonReentrant returns (uint256) {
         // Input validation using the subscription storage.
         if (s_subscriptions[subId].owner == address(0)) {
             revert InvalidSubscription();
@@ -464,6 +485,7 @@ contract VRFCoordinator is VRF, OwnableUpgradeable {
     function getSubscription(uint64 subId)
         external
         view
+        override
         returns (
             uint96 balance,
             uint64 reqCount,
@@ -480,6 +502,54 @@ contract VRFCoordinator is VRF, OwnableUpgradeable {
             s_subscriptions[subId].owner,
             s_subscriptions[subId].consumers
         );
+    }
+
+    /**
+     * @inheritdoc VRFCoordinatorV2Interface
+     */
+    function requestSubscriptionOwnerTransfer(uint64 subId, address newOwner)
+        external
+        override
+        onlySubOwner(subId)
+        nonReentrant
+    {}
+
+    /**
+     * @inheritdoc VRFCoordinatorV2Interface
+     */
+    function acceptSubscriptionOwnerTransfer(uint64 subId)
+        external
+        override
+        nonReentrant
+    {}
+
+    /**
+     * @notice Create a VRF subscription.
+     * @return subId - A unique subscription id.
+     * @dev You can manage the consumer set dynamically with addConsumer/removeConsumer.
+     * @dev Note to fund the subscription, use transferAndCall. For example
+     * @dev  LINKTOKEN.transferAndCall(
+     * @dev    address(COORDINATOR),
+     * @dev    amount,
+     * @dev    abi.encode(subId));
+     */
+    function createSubscription()
+        external
+        override
+        nonReentrant
+        returns (uint64 subId)
+    {
+        s_currentSubId++;
+        uint64 currentSubId = s_currentSubId;
+        address[] memory consumers = new address[](0);
+        s_subscriptions[currentSubId] = Subscription({
+            owner: msg.sender,
+            reqCount: 0,
+            consumers: consumers
+        });
+
+        emit SubscriptionCreated(currentSubId, msg.sender);
+        return currentSubId;
     }
 
     /*
@@ -513,6 +583,7 @@ contract VRFCoordinator is VRF, OwnableUpgradeable {
      */
     function removeConsumer(uint64 subId, address consumer)
         external
+        override
         onlySubOwnerOrAdmin(subId)
         nonReentrant
     {
@@ -543,6 +614,7 @@ contract VRFCoordinator is VRF, OwnableUpgradeable {
      */
     function addConsumer(uint64 subId, address consumer)
         external
+        override
         onlySubOwnerOrAdmin(subId)
         nonReentrant
     {
@@ -569,6 +641,7 @@ contract VRFCoordinator is VRF, OwnableUpgradeable {
      */
     function cancelSubscription(uint64 subId, address to)
         external
+        override
         onlySubOwnerOrAdmin(subId)
         nonReentrant
     {
@@ -592,7 +665,12 @@ contract VRFCoordinator is VRF, OwnableUpgradeable {
         emit SubscriptionCanceled(subId, to, 0);
     }
 
-    function pendingRequestExists(uint64 subId) public view returns (bool) {
+    function pendingRequestExists(uint64 subId)
+        public
+        view
+        override
+        returns (bool)
+    {
         Subscription memory subConfig = s_subscriptions[subId];
         for (uint256 i = 0; i < subConfig.consumers.length; i++) {
             for (uint256 j = 0; j < s_provingKeyHashes.length; j++) {
