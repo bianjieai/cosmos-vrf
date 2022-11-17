@@ -138,11 +138,11 @@ contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
         _;
     }
 
-    function initialize() public initializer {
+    function initialize(uint16 minRequestConfirmations, uint32 maxGasLimit) public initializer {
         __Ownable_init();
         s_config = Config({
-            minimumRequestConfirmations: 3,
-            maxGasLimit: 1000000,
+            minimumRequestConfirmations: minRequestConfirmations,
+            maxGasLimit: maxGasLimit,
             reentrancyLock: false
         });
     }
