@@ -189,6 +189,18 @@ contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
     }
 
     /**
+     * @notice get blockhash.
+     * @param height block height
+     */
+    function getBlockHash(uint256 height)
+        public
+        view
+        returns (bytes32)
+    {
+       return s_blockStore[height];
+    }
+
+    /**
      * @notice Deregisters a proving key to an oracle.
      * @param publicProvingKey key that oracle can use to submit vrf fulfillments
      */
