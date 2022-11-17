@@ -58,9 +58,10 @@ contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
     error IncorrectCommitment();
     error Reentrant();
     error ProvingKeyAlreadyRegistered(bytes32 keyHash);
+    error BlockhashNotFound(uint256 blockNum);
+
     event ProvingKeyRegistered(bytes32 keyHash);
     event ProvingKeyDeregistered(bytes32 keyHash);
-
     event SubscriptionCreated(uint64 indexed subId, address owner);
     event SubscriptionConsumerAdded(uint64 indexed subId, address consumer);
     event SubscriptionConsumerRemoved(uint64 indexed subId, address consumer);
@@ -99,6 +100,8 @@ contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
     mapping(bytes32 => bool) private s_provingKeys;
     // requestID -> commitment
     mapping(uint256 => bytes32) private s_requestCommitments;
+    // block height -> block hash
+    mapping(uint256 => bytes32) private s_blockStore;
 
     Config private s_config;
 
@@ -171,6 +174,18 @@ contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
         s_provingKeys[kh] = true;
         s_provingKeyHashes.push(kh);
         emit ProvingKeyRegistered(kh);
+    }
+
+    /**
+     * @notice upload blockhash.
+     * @param height block height
+     * @param hash block hash
+     */
+    function storeBlockHash(uint256 height ,bytes32 hash)
+        external
+        onlyOwner
+    {
+       s_blockStore[height] = hash;
     }
 
     /**
@@ -430,6 +445,12 @@ contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
         }
 
         bytes32 blockHash = blockhash(rc.blockNum);
+        if (blockHash == bytes32(0)) {
+            blockHash = s_blockStore[rc.blockNum];
+            if (blockHash == bytes32(0)) {
+                revert BlockhashNotFound(rc.blockNum);
+            }
+        }
         // The seed actually used by the VRF machinery, mixing in the blockhash
         uint256 actualSeed = uint256(
             keccak256(abi.encodePacked(proof.seed, blockHash))
@@ -476,6 +497,8 @@ contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
         bool success = callWithExactGas(rc.callbackGasLimit, rc.sender, resp);
         s_config.reentrancyLock = false;
 
+        //remove unusde data
+        delete s_blockStore[rc.blockNum];
         s_subscriptions[rc.subId].reqCount += 1;
         // Include payment in the event for tracking costs.
         emit RandomWordsFulfilled(requestId, randomness, 0, success);
@@ -549,30 +572,6 @@ contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
         });
 
         emit SubscriptionCreated(currentSubId, msg.sender);
-        return currentSubId;
-    }
-
-    /*
-     * @notice The contract owner helps subscribers to register an account
-     * @param subscriber the address of subscriber
-     * @return subscriber id
-     */
-    function createSubscription(address subscriber)
-        external
-        onlyOwner
-        nonReentrant
-        returns (uint64)
-    {
-        s_currentSubId++;
-        uint64 currentSubId = s_currentSubId;
-        address[] memory consumers = new address[](0);
-        s_subscriptions[currentSubId] = Subscription({
-            owner: subscriber,
-            reqCount: 0,
-            consumers: consumers
-        });
-
-        emit SubscriptionCreated(currentSubId, subscriber);
         return currentSubId;
     }
 
