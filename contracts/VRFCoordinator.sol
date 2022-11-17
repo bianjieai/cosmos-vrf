@@ -115,17 +115,17 @@ contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
 
     modifier onlySubOwnerOrAdmin(uint64 subId) {
         if (msg.sender == owner()) {
-            return;
+            _;
+        } else {
+            address subOwner = s_subscriptions[subId].owner;
+            if (subOwner == address(0)) {
+                revert InvalidSubscription();
+            }
+            if (msg.sender != subOwner) {
+                revert MustBeSubOwner(subOwner);
+            }
+            _;
         }
-
-        address subOwner = s_subscriptions[subId].owner;
-        if (subOwner == address(0)) {
-            revert InvalidSubscription();
-        }
-        if (msg.sender != subOwner) {
-            revert MustBeSubOwner(subOwner);
-        }
-        _;
     }
 
     modifier nonReentrant() {
@@ -182,7 +182,7 @@ contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
         onlyOwner
     {
         bytes32 kh = hashOfKey(publicProvingKey);
-        if (s_provingKeys[kh]) {
+        if (!s_provingKeys[kh]) {
             revert NoSuchProvingKey(kh);
         }
         delete s_provingKeys[kh];
@@ -405,7 +405,7 @@ contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
     {
         keyHash = hashOfKey(proof.pk);
         // Only registered proving keys are permitted.
-        if (s_provingKeys[keyHash]) {
+        if (!s_provingKeys[keyHash]) {
             revert NoSuchProvingKey(keyHash);
         }
         requestId = uint256(keccak256(abi.encode(keyHash, proof.seed)));
