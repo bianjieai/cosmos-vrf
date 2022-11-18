@@ -587,6 +587,35 @@ contract VRFCoordinator is VRF, VRFCoordinatorV2Interface, OwnableUpgradeable {
         return currentSubId;
     }
 
+    /**
+     * @notice Create a VRF subscription.
+     * @return subId - A unique subscription id.
+     * @dev You can manage the consumer set dynamically with addConsumer/removeConsumer.
+     * @dev Note to fund the subscription, use transferAndCall. For example
+     * @dev  LINKTOKEN.transferAndCall(
+     * @dev    address(COORDINATOR),
+     * @dev    amount,
+     * @dev    abi.encode(subId));
+     */
+    function createSubscription(address subscriber)
+        external
+        nonReentrant
+        onlyOwner
+        returns (uint64 subId)
+    {
+        s_currentSubId++;
+        uint64 currentSubId = s_currentSubId;
+        address[] memory consumers = new address[](0);
+        s_subscriptions[currentSubId] = Subscription({
+            owner: subscriber,
+            reqCount: 0,
+            consumers: consumers
+        });
+
+        emit SubscriptionCreated(currentSubId, subscriber);
+        return currentSubId;
+    }
+
     /*
      * @notice remove subscriber consumption contract
      * @param subId the id  of subscriber
